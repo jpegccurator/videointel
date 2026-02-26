@@ -26,9 +26,6 @@ RUN cd client && npm run build
 # Copy server code
 COPY server/ ./server/
 
-EXPOSE 4001
-
 ENV NODE_ENV=production
-ENV PORT=4001
 
 CMD ["node", "server/index.js"]
