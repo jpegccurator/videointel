@@ -1,0 +1,14 @@
+{
+  "name": "videointel-server",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "openai": "^4.85.0",
+    "uuid": "^11.0.3"
+  }
+}
