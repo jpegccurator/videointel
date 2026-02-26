@@ -46,6 +46,6 @@ try {
   console.error('    pip3 install yt-dlp\n');
 }
 
-app.listen(PORT, () => {
-  console.log(`\nVideoIntel running on http://localhost:${PORT}\n`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\nVideoIntel running on port ${PORT}\n`);
 });
