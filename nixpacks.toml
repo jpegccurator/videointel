@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["...", "yt-dlp", "ffmpeg"]
+
+[phases.install]
+cmds = ["cd server && npm install", "cd client && npm install"]
+
+[phases.build]
+cmds = ["cd client && npm run build"]
+
+[start]
+cmd = "node server/index.js"
