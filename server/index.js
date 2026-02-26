@@ -19,6 +19,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Health check
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
 // API Routes
 app.use('/api', analyzeRoutes);
 app.use('/api', generateRoutes);
@@ -28,10 +31,11 @@ app.use('/api', styleRoutes);
 // Production: serve built client
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientDist));
-app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api')) {
-    res.sendFile(path.join(clientDist, 'index.html'));
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/health')) {
+    return next();
   }
+  res.sendFile(path.join(clientDist, 'index.html'));
 });
 
 // Check for yt-dlp on startup

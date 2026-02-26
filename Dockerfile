@@ -27,6 +27,5 @@ RUN cd client && npm run build
 COPY server/ ./server/
 
 ENV NODE_ENV=production
-EXPOSE 4001
 
 CMD ["node", "server/index.js"]
