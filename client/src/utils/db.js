@@ -178,26 +178,3 @@ export async function deleteEditorialDecision(id) {
   await db.delete('editorialDecisions', id);
 }
 
-// ─── YouTube Settings ───
-
-const YT_SETTINGS_KEY = 'default';
-
-export async function getYouTubeSettings() {
-  const db = await getDB();
-  return db.get('youtubeSettings', YT_SETTINGS_KEY) || null;
-}
-
-export async function saveYouTubeSettings(settings) {
-  const db = await getDB();
-  const record = {
-    ...settings,
-    id: YT_SETTINGS_KEY,
-    googleApiKey: settings.googleApiKey || '',
-    playlistUrl: settings.playlistUrl || '',
-    channelUrl: settings.channelUrl || '',
-    channelId: settings.channelId || null,
-    lastSyncAt: settings.lastSyncAt || null,
-  };
-  await db.put('youtubeSettings', record);
-  return record;
-}
