@@ -18,7 +18,6 @@ COPY client/package*.json ./client/
 RUN cd client && npm install
 
 COPY client/ ./client/
-ARG CACHEBUST=1
 RUN cd client && npm run build
 
 COPY server/ ./server/
