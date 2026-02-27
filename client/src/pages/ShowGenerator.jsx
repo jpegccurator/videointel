@@ -18,6 +18,8 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
   const [generated, setGenerated] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [lastLearningContext, setLastLearningContext] = useState(null);
+  const [showLearningPreview, setShowLearningPreview] = useState(false);
 
   // Show content
   const [title, setTitle] = useState('');
@@ -126,6 +128,7 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
           getAllEditorialDecisions(),
         ]);
         learningContext = buildLearningContext(outcomes, decisions);
+        setLastLearningContext(learningContext);
       } catch (e) {
         // Learning context is optional - don't block generation
         console.warn('Failed to build learning context:', e);
@@ -566,6 +569,35 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
               Show concept saved to Outcomes. Editorial decisions recorded.
             </p>
           )}
+
+          {/* Learning context preview */}
+          <div style={{ marginTop: 24, borderTop: '1px solid var(--border, #333)', paddingTop: 16 }}>
+            <button
+              className="btn btn-sm btn-secondary"
+              onClick={() => setShowLearningPreview((v) => !v)}
+              style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}
+            >
+              {showLearningPreview ? 'Hide' : 'Show'} AI Context
+            </button>
+            {showLearningPreview && (
+              <pre style={{
+                marginTop: 12,
+                padding: 16,
+                background: 'var(--bg-secondary, #1a1a1a)',
+                borderRadius: 8,
+                fontSize: '0.78rem',
+                lineHeight: 1.6,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                color: 'var(--text-secondary)',
+                maxHeight: 400,
+                overflow: 'auto',
+                border: '1px solid var(--border, #333)',
+              }}>
+                {lastLearningContext || '(No learning context yet — save a show concept to start building patterns)'}
+              </pre>
+            )}
+          </div>
         </div>
       )}
     </div>
