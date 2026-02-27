@@ -18,13 +18,35 @@ function getDB() {
         }
         // v2 stores - learning loop
         if (oldVersion < 2) {
-          const outcomeStore = db.createObjectStore('showOutcomes', { keyPath: 'id' });
-          outcomeStore.createIndex('createdAt', 'createdAt');
-          outcomeStore.createIndex('status', 'status');
-          db.createObjectStore('editorialDecisions', { keyPath: 'id' });
-          db.createObjectStore('youtubeSettings', { keyPath: 'id' });
+          if (!db.objectStoreNames.contains('showOutcomes')) {
+            const outcomeStore = db.createObjectStore('showOutcomes', { keyPath: 'id' });
+            outcomeStore.createIndex('createdAt', 'createdAt');
+            outcomeStore.createIndex('status', 'status');
+          }
+          if (!db.objectStoreNames.contains('editorialDecisions')) {
+            db.createObjectStore('editorialDecisions', { keyPath: 'id' });
+          }
+          if (!db.objectStoreNames.contains('youtubeSettings')) {
+            db.createObjectStore('youtubeSettings', { keyPath: 'id' });
+          }
         }
       },
+      blocked() {
+        // Another tab has the old version open - close it to continue
+        console.warn('IndexedDB upgrade blocked by another tab. Close other VideoIntel tabs and refresh.');
+      },
+    }).catch((err) => {
+      console.error('IndexedDB open failed, resetting:', err);
+      // Nuclear fallback: delete and recreate
+      dbPromise = null;
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.deleteDatabase(DB_NAME);
+        req.onsuccess = () => {
+          // Retry after delete
+          resolve(getDB());
+        };
+        req.onerror = () => reject(err);
+      });
     });
   }
   return dbPromise;
