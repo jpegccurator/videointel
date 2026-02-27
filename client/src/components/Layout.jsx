@@ -4,6 +4,7 @@ const TABS = [
   { id: 'analyze', label: 'Analyze' },
   { id: 'library', label: 'Library' },
   { id: 'show', label: 'Show Generator' },
+  { id: 'outcomes', label: 'Outcomes' },
 ];
 
 export default function Layout({ activeTab, onTabChange, onSettingsClick, children }) {

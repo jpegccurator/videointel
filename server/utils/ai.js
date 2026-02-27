@@ -150,7 +150,7 @@ Pipeline: Global macro event -> Impact on liquidity flows -> What this means for
 - Concrete examples and specific numbers, never vague hand-waving.
 - When uncertain, say so clearly rather than hedging with wishy-washy language.`;
 
-async function generateShowConcept(videos, lockedElements, checkedDataPoints, currentContent, apiKey, customStylePrompt, libraryContext) {
+async function generateShowConcept(videos, lockedElements, checkedDataPoints, currentContent, apiKey, customStylePrompt, libraryContext, learningContext) {
   const openai = new OpenAI({ apiKey });
 
   const videoSummaries = videos.map((v) => {
@@ -193,6 +193,15 @@ async function generateShowConcept(videos, lockedElements, checkedDataPoints, cu
 
   if (libraryContext) {
     prompt += `For additional context, here is a summary of ALL videos the user has previously analyzed. Use this to avoid repeating ideas and to find connections across their research:\n\n${libraryContext}\n\n`;
+  }
+
+  if (learningContext) {
+    prompt += `=== LEARNING FROM PAST SHOWS ===
+The following data reflects the creator's past shows, editorial preferences, and YouTube performance. Use it to improve your output:
+
+${learningContext}
+
+INSTRUCTIONS: Favor title structures and angles from top-performing shows. Avoid patterns from underperforming shows. Study the direction of user title edits (AI -> User) and adapt your title style accordingly. Don't repeat topics from recent drafts. Match the data point density the user typically keeps.\n\n`;
   }
 
   if (lockedInstructions.length > 0) {

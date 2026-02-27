@@ -4,6 +4,7 @@ import SettingsModal from './components/SettingsModal';
 import Analyze from './pages/Analyze';
 import Library from './pages/Library';
 import ShowGenerator from './pages/ShowGenerator';
+import ShowOutcomes from './pages/ShowOutcomes';
 import { useLibrary } from './hooks/useIndexedDB';
 import { useOpenAI } from './hooks/useOpenAI';
 
@@ -73,6 +74,10 @@ export default function App() {
           selectedVideoIds={selectedVideoIds}
           onGoToLibrary={handleGoToLibrary}
         />
+      )}
+
+      {activeTab === 'outcomes' && (
+        <ShowOutcomes />
       )}
 
       <SettingsModal

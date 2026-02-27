@@ -1,10 +1,12 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import LockableElement from '../components/LockableElement';
 import VersionNavigator from '../components/VersionNavigator';
 import VerificationBadge from '../components/VerificationBadge';
 import ExpandableSection from '../components/ExpandableSection';
 import StyleConfig from '../components/StyleConfig';
-import { apiFetch, buildLibraryContext } from '../utils/api';
+import { apiFetch, buildLibraryContext, buildLearningContext } from '../utils/api';
+import { saveShowOutcome, saveEditorialDecision, getAllShowOutcomes, getAllEditorialDecisions } from '../utils/db';
+import { v4 as uuidv4 } from 'uuid';
 
 const MAX_VERSIONS = 5;
 
@@ -14,6 +16,8 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [generated, setGenerated] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Show content
   const [title, setTitle] = useState('');
@@ -25,6 +29,10 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
   const [whyNow, setWhyNow] = useState('');
   const [suggestedDataPoints, setSuggestedDataPoints] = useState([]);
   const [checkedDataPoints, setCheckedDataPoints] = useState([]);
+
+  // Original AI output (for editorial tracking)
+  const originalAiOutput = useRef(null);
+  const regenerationCount = useRef(0);
 
   // Locks
   const [lockedElements, setLockedElements] = useState({
@@ -98,15 +106,30 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
 
     setLoading(true);
     setError('');
+    setSaveSuccess(false);
 
     // Save current state if regenerating
     if (regenerateOnly && generated) {
       saveCurrentVersion();
+      regenerationCount.current += 1;
     }
 
     try {
       const stylePrompt = localStorage.getItem('videointel_style_prompt') || null;
       const libraryContext = buildLibraryContext(allLibraryVideos || []);
+
+      // Build learning context from past outcomes
+      let learningContext = null;
+      try {
+        const [outcomes, decisions] = await Promise.all([
+          getAllShowOutcomes(),
+          getAllEditorialDecisions(),
+        ]);
+        learningContext = buildLearningContext(outcomes, decisions);
+      } catch (e) {
+        // Learning context is optional - don't block generation
+        console.warn('Failed to build learning context:', e);
+      }
 
       const res = await apiFetch('/api/generate-show', {
         method: 'POST',
@@ -123,6 +146,7 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
             : {},
           stylePrompt,
           libraryContext,
+          learningContext,
         }),
       });
 
@@ -149,6 +173,20 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
 
       if (!regenerateOnly) {
         setCheckedDataPoints(newSuggested.map((sdp) => sdp.id));
+
+        // Store original AI output for editorial tracking
+        originalAiOutput.current = {
+          title: data.title || '',
+          thumbnailDescription: data.thumbnailDescription || '',
+          synopsis: data.synopsis || '',
+          thesis: data.thesis || '',
+          counterArgument: data.counterArgument || '',
+          narrativeArc: data.narrativeArc || '',
+          whyNow: data.whyNow || '',
+          suggestedDataPoints: newSuggested,
+        };
+        regenerationCount.current = 0;
+
         const firstVersion = {
           title: data.title || '',
           thumbnailDescription: data.thumbnailDescription || '',
@@ -171,7 +209,72 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
     } finally {
       setLoading(false);
     }
-  }, [selectedVideos, lockedElements, checkedDataPoints, title, thumbnailDescription, synopsis, allDataPoints, generated, saveCurrentVersion]);
+  }, [selectedVideos, lockedElements, checkedDataPoints, title, thumbnailDescription, synopsis, allDataPoints, generated, saveCurrentVersion, allLibraryVideos]);
+
+  const handleSaveConcept = useCallback(async () => {
+    if (!generated || !originalAiOutput.current) return;
+
+    setSaving(true);
+    setSaveSuccess(false);
+
+    try {
+      const outcomeId = uuidv4();
+      const original = originalAiOutput.current;
+
+      // Save outcome
+      await saveShowOutcome({
+        id: outcomeId,
+        status: 'draft',
+        concept: original,
+        finalContent: {
+          title,
+          thumbnailDescription,
+          synopsis,
+          thesis,
+          counterArgument,
+          narrativeArc,
+          whyNow,
+        },
+        sourceVideoIds: selectedVideoIds,
+        checkedDataPointIds: checkedDataPoints,
+      });
+
+      // Save editorial decisions
+      const titleKept = title === original.title;
+      const synopsisKept = synopsis === original.synopsis;
+      const thumbnailKept = thumbnailDescription === original.thumbnailDescription;
+      const totalOffered = original.suggestedDataPoints?.length || 0;
+      const totalKept = checkedDataPoints.length;
+
+      await saveEditorialDecision({
+        outcomeId,
+        totalRegenerations: regenerationCount.current,
+        versionsGenerated: versions.length,
+        titleKept,
+        titleEdited: !titleKept,
+        titleOriginal: original.title,
+        titleFinal: title,
+        synopsisKept,
+        synopsisEdited: !synopsisKept,
+        thumbnailKept,
+        thumbnailEdited: !thumbnailKept,
+        dataPointsOffered: totalOffered,
+        dataPointsKept: totalKept,
+        dataPointsRemoved: Math.max(0, totalOffered - totalKept),
+        elementsLocked: Object.entries(lockedElements)
+          .filter(([, v]) => v)
+          .map(([k]) => k),
+      });
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to save concept:', err);
+      setError('Failed to save show concept: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }, [generated, title, thumbnailDescription, synopsis, thesis, counterArgument, narrativeArc, whyNow, selectedVideoIds, checkedDataPoints, lockedElements, versions]);
 
   const toggleLock = (key) => {
     setLockedElements((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -438,8 +541,8 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
             </div>
           </div>
 
-          {/* Regenerate button */}
-          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+          {/* Action buttons */}
+          <div style={{ textAlign: 'center', padding: '24px 0', display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
               className="btn btn-primary"
               onClick={() => handleGenerate(true)}
@@ -448,7 +551,21 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
             >
               {loading ? 'Regenerating...' : 'Regenerate Unlocked Elements'}
             </button>
+            <button
+              className="btn btn-secondary"
+              onClick={handleSaveConcept}
+              disabled={saving || saveSuccess}
+              style={{ padding: '14px 32px', fontSize: '1.05rem' }}
+            >
+              {saving ? 'Saving...' : saveSuccess ? '\u2713 Saved' : 'Save Show Concept'}
+            </button>
           </div>
+
+          {saveSuccess && (
+            <p style={{ textAlign: 'center', color: 'var(--success, #22c55e)', fontSize: '0.9rem' }}>
+              Show concept saved to Outcomes. Editorial decisions recorded.
+            </p>
+          )}
         </div>
       )}
     </div>

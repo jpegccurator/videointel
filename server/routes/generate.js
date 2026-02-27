@@ -9,7 +9,7 @@ router.post('/generate-show', async (req, res) => {
     return res.status(400).json({ error: 'OpenAI API key not set. Please configure it in Settings.' });
   }
 
-  const { videos, lockedElements, checkedDataPoints, currentContent, stylePrompt, libraryContext } = req.body;
+  const { videos, lockedElements, checkedDataPoints, currentContent, stylePrompt, libraryContext, learningContext } = req.body;
 
   if (!videos || !Array.isArray(videos) || videos.length === 0) {
     return res.status(400).json({ error: 'At least one video is required.' });
@@ -23,7 +23,8 @@ router.post('/generate-show', async (req, res) => {
       currentContent || {},
       apiKey,
       stylePrompt || null,
-      libraryContext || null
+      libraryContext || null,
+      learningContext || null
     );
     res.json(result);
   } catch (error) {
