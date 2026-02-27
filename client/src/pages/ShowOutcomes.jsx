@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getAllShowOutcomes, deleteShowOutcome, saveShowOutcome } from '../utils/db';
+import { getAllShowOutcomes, deleteShowOutcome, saveShowOutcome, getYouTubeSettings } from '../utils/db';
 import { useYouTubeSync } from '../hooks/useYouTubeSync';
 import { extractVideoId } from '../utils/youtube';
 
@@ -21,6 +21,7 @@ export default function ShowOutcomes() {
   const [matchingId, setMatchingId] = useState(null);
   const [matchUrl, setMatchUrl] = useState('');
   const [expandedId, setExpandedId] = useState(null);
+  const [hasYouTube, setHasYouTube] = useState(false);
 
   const { syncing, syncResult, syncError, syncPerformance, canSync, clearSyncMessages } = useYouTubeSync();
 
@@ -38,6 +39,9 @@ export default function ShowOutcomes() {
 
   useEffect(() => {
     loadOutcomes();
+    getYouTubeSettings().then((s) => {
+      setHasYouTube(!!(s && s.googleApiKey));
+    });
   }, [loadOutcomes]);
 
   // Reload after sync completes
@@ -88,24 +92,30 @@ export default function ShowOutcomes() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h3 style={{ margin: 0 }}>Show Outcomes</h3>
-        <button
-          className="btn btn-primary"
-          onClick={async () => {
-            clearSyncMessages();
-            await syncPerformance();
-          }}
-          disabled={!canSync || syncing}
-          style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-        >
-          {syncing ? (
-            <>
-              <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
-              Syncing...
-            </>
-          ) : (
-            'Sync with YouTube'
-          )}
-        </button>
+        {hasYouTube ? (
+          <button
+            className="btn btn-primary"
+            onClick={async () => {
+              clearSyncMessages();
+              await syncPerformance();
+            }}
+            disabled={!canSync || syncing}
+            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+          >
+            {syncing ? (
+              <>
+                <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                Syncing...
+              </>
+            ) : (
+              'Sync with YouTube'
+            )}
+          </button>
+        ) : (
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            Add a Google API key in Settings to sync with YouTube
+          </span>
+        )}
       </div>
 
       {/* Sync feedback */}

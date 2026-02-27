@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const OpenAI = require('openai');
 
+// Return what's pre-configured via env vars (for "personal" deployments)
+router.get('/settings/defaults', (req, res) => {
+  res.json({
+    hasOpenAIKey: !!process.env.OPENAI_API_KEY,
+    hasGoogleApiKey: !!process.env.GOOGLE_API_KEY,
+    googleApiKey: process.env.GOOGLE_API_KEY || null,
+    youtubeChannel: process.env.YOUTUBE_CHANNEL || null,
+  });
+});
+
 // Test API key - stateless, key comes from header
 router.post('/settings/test', async (req, res) => {
   const apiKey = req.apiKey;

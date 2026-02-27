@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getYouTubeSettings, saveYouTubeSettings } from '../utils/db';
 
-export default function SettingsModal({ isOpen, onClose, apiKey, onSave, onTest }) {
+export default function SettingsModal({ isOpen, onClose, apiKey, serverHasKey, onSave, onTest }) {
   const [key, setKey] = useState(apiKey || '');
   const [testResult, setTestResult] = useState(null);
   const [testing, setTesting] = useState(false);
@@ -28,17 +28,17 @@ export default function SettingsModal({ isOpen, onClose, apiKey, onSave, onTest 
   if (!isOpen) return null;
 
   const handleSave = () => {
-    if (!key.trim()) return;
-    onSave(key.trim());
+    if (!key.trim() && !serverHasKey) return;
+    if (key.trim()) onSave(key.trim());
     setTestResult(null);
     onClose();
   };
 
   const handleTest = async () => {
-    if (!key.trim()) return;
+    if (!key.trim() && !serverHasKey) return;
     setTesting(true);
     setTestResult(null);
-    onSave(key.trim());
+    if (key.trim()) onSave(key.trim());
     const result = await onTest(key.trim());
     setTestResult(result);
     setTesting(false);
@@ -53,7 +53,7 @@ export default function SettingsModal({ isOpen, onClose, apiKey, onSave, onTest 
         ...existing,
         googleApiKey: ytApiKey.trim(),
         channelUrl: ytChannel.trim(),
-        channelId: null, // Reset so it re-resolves on next sync
+        channelId: null,
       });
       setYtSaved(true);
       setTimeout(() => setYtSaved(false), 2000);
@@ -70,7 +70,13 @@ export default function SettingsModal({ isOpen, onClose, apiKey, onSave, onTest 
         <h2>Settings</h2>
 
         {/* OpenAI Section */}
-        <p>Enter your OpenAI API key to use VideoIntel. Your key is stored locally in your browser.</p>
+        {serverHasKey ? (
+          <div className="message message-success" style={{ marginBottom: 16 }}>
+            OpenAI API key is pre-configured on this server. You can override it below, or leave blank to use the server key.
+          </div>
+        ) : (
+          <p>Enter your OpenAI API key to use VideoIntel. Your key is stored locally in your browser.</p>
+        )}
 
         <div className="form-group">
           <label htmlFor="api-key">OpenAI API Key</label>
@@ -78,7 +84,7 @@ export default function SettingsModal({ isOpen, onClose, apiKey, onSave, onTest 
             id="api-key"
             type="password"
             className="input"
-            placeholder="sk-..."
+            placeholder={serverHasKey ? 'Using server key (override optional)' : 'sk-...'}
             value={key}
             onChange={(e) => setKey(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSave()}
@@ -93,23 +99,36 @@ export default function SettingsModal({ isOpen, onClose, apiKey, onSave, onTest 
 
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '20px' }}>
           <button className="btn btn-secondary" onClick={onClose}>
-            Cancel
+            {serverHasKey && !key.trim() ? 'Close' : 'Cancel'}
           </button>
-          <button className="btn btn-secondary" onClick={handleTest} disabled={!key.trim() || testing}>
+          <button
+            className="btn btn-secondary"
+            onClick={handleTest}
+            disabled={(!key.trim() && !serverHasKey) || testing}
+          >
             {testing ? 'Testing...' : 'Test Key'}
           </button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={!key.trim()}>
-            Save
+          <button
+            className="btn btn-primary"
+            onClick={handleSave}
+            disabled={!key.trim() && !serverHasKey}
+          >
+            {serverHasKey && !key.trim() ? 'Done' : 'Save'}
           </button>
         </div>
 
-        {/* YouTube Section */}
+        {/* YouTube Section (Optional) */}
         <hr style={{ margin: '28px 0 20px', borderColor: 'var(--border, #333)' }} />
 
-        <h3 style={{ marginBottom: 8 }}>YouTube Channel</h3>
+        <h3 style={{ marginBottom: 8 }}>
+          YouTube Channel
+          <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 8 }}>
+            Optional
+          </span>
+        </h3>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 16 }}>
           Connect your YouTube channel to track show performance. Requires a free Google API key
-          (YouTube Data API v3, 10k requests/day).
+          (YouTube Data API v3, 10k requests/day). Skip this if you don't need performance tracking.
         </p>
 
         <div className="form-group">

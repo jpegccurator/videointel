@@ -1,9 +1,24 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 const STORAGE_KEY = 'videointel_openai_key';
 
 export function useOpenAI() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(STORAGE_KEY) || '');
+  const [serverHasKey, setServerHasKey] = useState(false);
+  const [defaults, setDefaults] = useState(null);
+
+  // Check server defaults on mount
+  useEffect(() => {
+    fetch('/api/settings/defaults')
+      .then((r) => r.json())
+      .then((data) => {
+        setDefaults(data);
+        if (data.hasOpenAIKey) {
+          setServerHasKey(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const saveKey = useCallback((key) => {
     localStorage.setItem(STORAGE_KEY, key);
@@ -26,5 +41,8 @@ export function useOpenAI() {
     }
   }, []);
 
-  return { apiKey, hasKey: !!apiKey, saveKey, testKey };
+  // User has a key if it's in localStorage OR the server has one via env var
+  const hasKey = !!apiKey || serverHasKey;
+
+  return { apiKey, hasKey, serverHasKey, defaults, saveKey, testKey };
 }

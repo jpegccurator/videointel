@@ -13,9 +13,9 @@ const PORT = process.env.PORT || 4001;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// Middleware: extract API key from header and attach to req
+// Middleware: extract API key from header, fall back to env var
 app.use((req, res, next) => {
-  req.apiKey = req.headers['x-api-key'] || null;
+  req.apiKey = req.headers['x-api-key'] || process.env.OPENAI_API_KEY || null;
   next();
 });
 
