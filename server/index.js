@@ -13,6 +13,31 @@ const PORT = process.env.PORT || 4001;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
+// Basic auth - only active when AUTH_PASSWORD env var is set
+if (process.env.AUTH_PASSWORD) {
+  app.use((req, res, next) => {
+    // Health check bypasses auth
+    if (req.path === '/health') return next();
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Basic ')) {
+      res.set('WWW-Authenticate', 'Basic realm="VideoIntel"');
+      return res.status(401).send('Authentication required');
+    }
+
+    const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString();
+    const [, password] = credentials.split(':');
+
+    if (password !== process.env.AUTH_PASSWORD) {
+      res.set('WWW-Authenticate', 'Basic realm="VideoIntel"');
+      return res.status(401).send('Invalid credentials');
+    }
+
+    next();
+  });
+  console.log('Basic auth enabled');
+}
+
 // Middleware: extract API key from header, fall back to env var
 app.use((req, res, next) => {
   req.apiKey = req.headers['x-api-key'] || process.env.OPENAI_API_KEY || null;
