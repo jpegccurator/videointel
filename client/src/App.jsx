@@ -27,14 +27,14 @@ export default function App() {
   // Auto-populate YouTube settings from server env vars (one-time)
   useEffect(() => {
     if (!defaults) return;
-    if (!defaults.hasGoogleApiKey && !defaults.youtubeChannel) return;
+    if (!defaults.hasGoogleApiKey && !defaults.youtubePlaylist && !defaults.youtubeChannel) return;
 
     getYouTubeSettings().then((existing) => {
-      // Only populate if user hasn't already configured their own
-      if (existing && (existing.googleApiKey || existing.channelUrl)) return;
+      if (existing && (existing.googleApiKey || existing.playlistUrl || existing.channelUrl)) return;
 
       saveYouTubeSettings({
         googleApiKey: defaults.googleApiKey || '',
+        playlistUrl: defaults.youtubePlaylist || '',
         channelUrl: defaults.youtubeChannel || '',
       });
     });

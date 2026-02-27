@@ -8,7 +8,7 @@ export default function SettingsModal({ isOpen, onClose, apiKey, serverHasKey, o
 
   // YouTube settings
   const [ytApiKey, setYtApiKey] = useState('');
-  const [ytChannel, setYtChannel] = useState('');
+  const [ytSource, setYtSource] = useState('');
   const [ytSaving, setYtSaving] = useState(false);
   const [ytSaved, setYtSaved] = useState(false);
 
@@ -19,7 +19,7 @@ export default function SettingsModal({ isOpen, onClose, apiKey, serverHasKey, o
       getYouTubeSettings().then((settings) => {
         if (settings) {
           setYtApiKey(settings.googleApiKey || '');
-          setYtChannel(settings.channelUrl || '');
+          setYtSource(settings.playlistUrl || settings.channelUrl || '');
         }
       });
     }
@@ -49,10 +49,14 @@ export default function SettingsModal({ isOpen, onClose, apiKey, serverHasKey, o
     setYtSaved(false);
     try {
       const existing = await getYouTubeSettings();
+      const source = ytSource.trim();
+      const isPlaylist = source.includes('list=') || source.startsWith('PL');
+
       await saveYouTubeSettings({
         ...existing,
         googleApiKey: ytApiKey.trim(),
-        channelUrl: ytChannel.trim(),
+        playlistUrl: isPlaylist ? source : '',
+        channelUrl: isPlaylist ? '' : source,
         channelId: null,
       });
       setYtSaved(true);
@@ -121,14 +125,14 @@ export default function SettingsModal({ isOpen, onClose, apiKey, serverHasKey, o
         <hr style={{ margin: '28px 0 20px', borderColor: 'var(--border, #333)' }} />
 
         <h3 style={{ marginBottom: 8 }}>
-          YouTube Channel
+          YouTube Performance Tracking
           <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 8 }}>
             Optional
           </span>
         </h3>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 16 }}>
-          Connect your YouTube channel to track show performance. Requires a free Google API key
-          (YouTube Data API v3, 10k requests/day). Skip this if you don't need performance tracking.
+          Track how your shows perform on YouTube. Use a playlist URL if your shows are on a shared channel
+          (e.g. one host on a multi-host channel). Requires a free Google API key (YouTube Data API v3).
         </p>
 
         <div className="form-group">
@@ -144,22 +148,25 @@ export default function SettingsModal({ isOpen, onClose, apiKey, serverHasKey, o
         </div>
 
         <div className="form-group">
-          <label htmlFor="yt-channel">Channel URL or Handle</label>
+          <label htmlFor="yt-source">Playlist URL, Channel URL, or Handle</label>
           <input
-            id="yt-channel"
+            id="yt-source"
             type="text"
             className="input"
-            placeholder="youtube.com/@handle or @handle"
-            value={ytChannel}
-            onChange={(e) => setYtChannel(e.target.value)}
+            placeholder="youtube.com/playlist?list=PLxxx or @handle"
+            value={ytSource}
+            onChange={(e) => setYtSource(e.target.value)}
           />
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 4 }}>
+            Playlist URL recommended if you're one host on a shared channel
+          </p>
         </div>
 
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '16px' }}>
           <button
             className="btn btn-secondary"
             onClick={handleSaveYouTube}
-            disabled={ytSaving || (!ytApiKey.trim() && !ytChannel.trim())}
+            disabled={ytSaving || (!ytApiKey.trim() && !ytSource.trim())}
           >
             {ytSaving ? 'Saving...' : ytSaved ? '\u2713 Saved' : 'Save YouTube Settings'}
           </button>

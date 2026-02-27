@@ -168,12 +168,13 @@ export async function getYouTubeSettings() {
 export async function saveYouTubeSettings(settings) {
   const db = await getDB();
   const record = {
+    ...settings,
     id: YT_SETTINGS_KEY,
     googleApiKey: settings.googleApiKey || '',
+    playlistUrl: settings.playlistUrl || '',
     channelUrl: settings.channelUrl || '',
     channelId: settings.channelId || null,
     lastSyncAt: settings.lastSyncAt || null,
-    ...settings,
   };
   await db.put('youtubeSettings', record);
   return record;

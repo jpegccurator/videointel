@@ -40,7 +40,7 @@ export default function ShowOutcomes() {
   useEffect(() => {
     loadOutcomes();
     getYouTubeSettings().then((s) => {
-      setHasYouTube(!!(s && s.googleApiKey));
+      setHasYouTube(!!(s && s.googleApiKey && (s.playlistUrl || s.channelUrl)));
     });
   }, [loadOutcomes]);
 

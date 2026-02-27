@@ -8,6 +8,7 @@ router.get('/settings/defaults', (req, res) => {
     hasOpenAIKey: !!process.env.OPENAI_API_KEY,
     hasGoogleApiKey: !!process.env.GOOGLE_API_KEY,
     googleApiKey: process.env.GOOGLE_API_KEY || null,
+    youtubePlaylist: process.env.YOUTUBE_PLAYLIST || null,
     youtubeChannel: process.env.YOUTUBE_CHANNEL || null,
   });
 });

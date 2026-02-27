@@ -1,6 +1,64 @@
 const YT_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
 /**
+ * Extract a playlist ID from a YouTube playlist URL.
+ * Accepts: full URL with ?list=PLxxx, or raw playlist ID.
+ */
+export function extractPlaylistId(input) {
+  if (!input) return null;
+  const trimmed = input.trim();
+
+  // URL with list= parameter
+  const urlMatch = trimmed.match(/[?&]list=(PL[\w-]+)/);
+  if (urlMatch) return urlMatch[1];
+
+  // Raw playlist ID
+  if (trimmed.startsWith('PL') && trimmed.length > 10) return trimmed;
+
+  return null;
+}
+
+/**
+ * Get videos from a specific playlist.
+ * Paginates to fetch all items (playlists can have hundreds of videos).
+ * API cost: 1 unit per page of 50 items.
+ */
+export async function getPlaylistVideos(playlistId, apiKey, maxResults = 200) {
+  const videos = [];
+  let nextPageToken = null;
+
+  do {
+    const pageSize = Math.min(50, maxResults - videos.length);
+    let url = `${YT_API_BASE}/playlistItems?playlistId=${playlistId}&part=snippet&maxResults=${pageSize}&key=${apiKey}`;
+    if (nextPageToken) url += `&pageToken=${nextPageToken}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.error) {
+      throw new Error(data.error.message || 'Failed to fetch playlist');
+    }
+
+    if (data.items) {
+      for (const item of data.items) {
+        // Skip deleted/private videos
+        if (item.snippet.title === 'Deleted video' || item.snippet.title === 'Private video') continue;
+        videos.push({
+          videoId: item.snippet.resourceId.videoId,
+          title: item.snippet.title,
+          publishedAt: item.snippet.publishedAt,
+          thumbnailUrl: item.snippet.thumbnails?.medium?.url || null,
+        });
+      }
+    }
+
+    nextPageToken = data.nextPageToken || null;
+  } while (nextPageToken && videos.length < maxResults);
+
+  return videos;
+}
+
+/**
  * Resolve a YouTube channel handle or URL to a channel ID.
  * Accepts: @handle, /channel/UCxxx, /c/name, or full URLs.
  */
@@ -30,7 +88,6 @@ export async function resolveChannelId(channelInput, apiKey) {
     if (data.items && data.items.length > 0) {
       return data.items[0].id;
     }
-    // Fallback: search by username
     const res2 = await fetch(
       `${YT_API_BASE}/channels?forUsername=${encodeURIComponent(handle)}&part=id&key=${apiKey}`
     );
@@ -40,7 +97,6 @@ export async function resolveChannelId(channelInput, apiKey) {
     }
   }
 
-  // If it looks like a channel ID already
   if (input.startsWith('UC') && input.length >= 24) {
     return input;
   }
@@ -51,10 +107,8 @@ export async function resolveChannelId(channelInput, apiKey) {
 /**
  * Get recent videos from a channel's uploads playlist.
  * Returns up to `maxResults` videos (default 50).
- * API cost: 1 (channels.list) + 1 (playlistItems.list) + 1 (videos.list) = ~3 units
  */
 export async function getChannelVideos(channelId, apiKey, maxResults = 50) {
-  // Get uploads playlist ID
   const channelRes = await fetch(
     `${YT_API_BASE}/channels?id=${channelId}&part=contentDetails&key=${apiKey}`
   );
@@ -63,20 +117,7 @@ export async function getChannelVideos(channelId, apiKey, maxResults = 50) {
     throw new Error('Channel not found');
   }
   const uploadsPlaylistId = channelData.items[0].contentDetails.relatedPlaylists.uploads;
-
-  // Get video IDs from uploads playlist
-  const playlistRes = await fetch(
-    `${YT_API_BASE}/playlistItems?playlistId=${uploadsPlaylistId}&part=snippet&maxResults=${maxResults}&key=${apiKey}`
-  );
-  const playlistData = await playlistRes.json();
-  if (!playlistData.items) return [];
-
-  return playlistData.items.map((item) => ({
-    videoId: item.snippet.resourceId.videoId,
-    title: item.snippet.title,
-    publishedAt: item.snippet.publishedAt,
-    thumbnailUrl: item.snippet.thumbnails?.medium?.url || null,
-  }));
+  return getPlaylistVideos(uploadsPlaylistId, apiKey, maxResults);
 }
 
 /**
