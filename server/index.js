@@ -16,8 +16,9 @@ app.use(express.json({ limit: '50mb' }));
 // Basic auth - only active when AUTH_PASSWORD env var is set
 if (process.env.AUTH_PASSWORD) {
   app.use((req, res, next) => {
-    // Health check bypasses auth
-    if (req.path === '/health') return next();
+    // Health check and static assets bypass auth (HTML triggers the prompt,
+    // then the browser sends credentials for API calls automatically)
+    if (req.path === '/health' || req.path.startsWith('/assets/')) return next();
 
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Basic ')) {
