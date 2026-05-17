@@ -150,7 +150,7 @@ Pipeline: Global macro event -> Impact on liquidity flows -> What this means for
 - Concrete examples and specific numbers, never vague hand-waving.
 - When uncertain, say so clearly rather than hedging with wishy-washy language.`;
 
-async function generateShowConcept(videos, lockedElements, checkedDataPoints, currentContent, apiKey, customStylePrompt, libraryContext, learningContext) {
+async function generateShowConcept(videos, lockedElements, checkedDataPoints, currentContent, apiKey, customStylePrompt, libraryContext, learningContext, creativeDirection, mustIncludeDataPoints, customDataPoints) {
   const openai = new OpenAI({ apiKey });
 
   const videoSummaries = videos.map((v) => {
@@ -160,7 +160,8 @@ async function generateShowConcept(videos, lockedElements, checkedDataPoints, cu
         const vStatus = dp.verification?.verified || 'unverified';
         const actual = dp.verification?.actualValue ? ` (actual: ${dp.verification.actualValue})` : '';
         const source = dp.verification?.sourceName ? ` [source: ${dp.verification.sourceName}]` : '';
-        return `- ${dp.claim}${actual}${source} [${vStatus}]`;
+        const mustInclude = (mustIncludeDataPoints || []).includes(dp.id) ? ' **MUST INCLUDE**' : '';
+        return `- ${dp.claim}${actual}${source} [${vStatus}]${mustInclude}`;
       })
       .join('\n');
     return `Video: "${v.videoMeta.title}"\nSummary: ${v.analysis.oneLine}\nKey Takeaways:\n${(v.analysis.keyTakeaways || []).map(t => `- ${t}`).join('\n')}\nVerified Data Points:\n${verifiedPoints}`;
@@ -187,9 +188,24 @@ async function generateShowConcept(videos, lockedElements, checkedDataPoints, cu
     regenerateInstructions.push('SYNOPSIS');
   }
 
+  if (lockedElements.evidence && currentContent.suggestedDataPoints && currentContent.suggestedDataPoints.length > 0) {
+    const lockedEvidence = currentContent.suggestedDataPoints.map((sdp) =>
+      `  - claim: "${sdp.claim}", usage_note: "${sdp.usageNote || ''}", data_point_id: "${sdp.dataPointId || sdp.id || ''}"`
+    ).join('\n');
+    lockedInstructions.push(`SUGGESTED_DATA_POINTS (LOCKED - return these EXACTLY as provided, same claims, same usage notes, same IDs):\n${lockedEvidence}`);
+  } else {
+    regenerateInstructions.push('SUGGESTED_DATA_POINTS');
+  }
+
   const today = new Date().toISOString().split('T')[0];
 
   let prompt = `Today is ${today}. Generate a YouTube show concept using these analyzed source videos:\n\n${videoSummaries}\n\n`;
+
+  // Custom data points from the creator
+  if (customDataPoints && customDataPoints.length > 0) {
+    const customBlock = customDataPoints.map((dp) => `- ${dp.claim} [user-provided] **MUST INCLUDE**`).join('\n');
+    prompt += `ADDITIONAL DATA POINTS (provided by the creator):\n${customBlock}\n\n`;
+  }
 
   if (libraryContext) {
     prompt += `For additional context, here is a summary of ALL videos the user has previously analyzed. Use this to avoid repeating ideas and to find connections across their research:\n\n${libraryContext}\n\n`;
@@ -202,6 +218,14 @@ The following data reflects the creator's past shows, editorial preferences, and
 ${learningContext}
 
 INSTRUCTIONS: Favor title structures and angles from top-performing shows. Avoid patterns from underperforming shows. Study the direction of user title edits (AI -> User) and adapt your title style accordingly. Don't repeat topics from recent drafts. Match the data point density the user typically keeps.\n\n`;
+  }
+
+  // Creative direction from the creator
+  if (creativeDirection) {
+    prompt += `=== CREATIVE DIRECTION FROM THE CREATOR ===
+The creator has a specific vision for this show. Build the concept around this direction:
+"${creativeDirection}"
+This overrides your default ideation. Shape thesis, evidence, narrative, and framing to serve this.\n\n`;
   }
 
   if (lockedInstructions.length > 0) {
@@ -228,7 +252,12 @@ INSTRUCTIONS: Favor title structures and angles from top-performing shows. Avoid
 
 7. WHY_NOW: Why this matters THIS WEEK specifically. Must be forward-looking, not a recap of old news.
 
-8. SUGGESTED_DATA_POINTS: Pick the most compelling verified data points from the source videos. For each, explain HOW Alessandro would present it (context first, then the number, then a scale comparison, then the "so what"). Only include data points that actually serve the thesis.
+8. SUGGESTED_DATA_POINTS:
+- Data points marked **MUST INCLUDE** are REQUIRED. Include every single one.
+- User-provided data points are REQUIRED. Include them all.
+- Beyond required points, pick additional compelling points. Aim for 6-10 total data points, not 3-4.
+- Every point must serve the thesis or counter-argument. No filler.
+- For each, explain HOW Alessandro would present it (context first, then the number, then a scale comparison, then the "so what").
 
 Self-check before responding: Would Alessandro actually make this show? Would it get 25,000+ views? Would someone share it? If any answer is no, try harder.
 

@@ -5,6 +5,7 @@ import Analyze from './pages/Analyze';
 import Library from './pages/Library';
 import ShowGenerator from './pages/ShowGenerator';
 import ShowOutcomes from './pages/ShowOutcomes';
+import ShowDNA from './pages/ShowDNA';
 import { useLibrary } from './hooks/useIndexedDB';
 import { useOpenAI } from './hooks/useOpenAI';
 
@@ -73,6 +74,13 @@ export default function App() {
           allLibraryVideos={videos}
           selectedVideoIds={selectedVideoIds}
           onGoToLibrary={handleGoToLibrary}
+        />
+      )}
+
+      {activeTab === 'dna' && (
+        <ShowDNA
+          hasApiKey={hasKey}
+          onNeedSettings={() => setSettingsOpen(true)}
         />
       )}
 

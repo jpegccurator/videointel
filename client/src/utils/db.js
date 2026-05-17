@@ -2,7 +2,7 @@ import { openDB } from 'idb';
 import { v4 as uuidv4 } from 'uuid';
 
 const DB_NAME = 'videointel';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise = null;
 
@@ -28,6 +28,14 @@ function getDB() {
           }
           if (!db.objectStoreNames.contains('youtubeSettings')) {
             db.createObjectStore('youtubeSettings', { keyPath: 'id' });
+          }
+        }
+        // v3 stores - playlist DNA
+        if (oldVersion < 3) {
+          if (!db.objectStoreNames.contains('playlistDNA')) {
+            const dnaStore = db.createObjectStore('playlistDNA', { keyPath: 'id' });
+            dnaStore.createIndex('playlistUrl', 'playlistUrl');
+            dnaStore.createIndex('lastUpdated', 'lastUpdated');
           }
         }
       },
@@ -176,5 +184,54 @@ export async function getEditorialDecision(id) {
 export async function deleteEditorialDecision(id) {
   const db = await getDB();
   await db.delete('editorialDecisions', id);
+}
+
+// ─── Playlist DNA ───
+
+export async function savePlaylistDNA(dnaRecord) {
+  const db = await getDB();
+  const record = {
+    ...dnaRecord,
+    id: dnaRecord.id || uuidv4(),
+    lastUpdated: new Date().toISOString(),
+  };
+  await db.put('playlistDNA', record);
+  return record;
+}
+
+export async function getPlaylistDNA(id) {
+  const db = await getDB();
+  return db.get('playlistDNA', id);
+}
+
+export async function getPlaylistDNAByUrl(playlistUrl) {
+  const db = await getDB();
+  const all = await db.getAllFromIndex('playlistDNA', 'playlistUrl', playlistUrl);
+  // Return the most recently updated one
+  if (all.length === 0) return null;
+  return all.sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated))[0];
+}
+
+export async function getAllPlaylistDNA() {
+  const db = await getDB();
+  return db.getAll('playlistDNA');
+}
+
+export async function deletePlaylistDNA(id) {
+  const db = await getDB();
+  await db.delete('playlistDNA', id);
+}
+
+// ─── YouTube Settings (playlist URL persistence) ───
+
+export async function saveYoutubePlaylistUrl(url) {
+  const db = await getDB();
+  await db.put('youtubeSettings', { id: 'playlistUrl', value: url });
+}
+
+export async function getYoutubePlaylistUrl() {
+  const db = await getDB();
+  const record = await db.get('youtubeSettings', 'playlistUrl');
+  return record?.value || '';
 }
 

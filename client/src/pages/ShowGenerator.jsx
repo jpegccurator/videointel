@@ -4,8 +4,8 @@ import VersionNavigator from '../components/VersionNavigator';
 import VerificationBadge from '../components/VerificationBadge';
 import ExpandableSection from '../components/ExpandableSection';
 import StyleConfig from '../components/StyleConfig';
-import { apiFetch, buildLibraryContext, buildLearningContext } from '../utils/api';
-import { saveShowOutcome, saveEditorialDecision, getAllShowOutcomes, getAllEditorialDecisions } from '../utils/db';
+import { apiFetch, buildLibraryContext, buildLearningContext, buildDNAContext } from '../utils/api';
+import { saveShowOutcome, saveEditorialDecision, getAllShowOutcomes, getAllEditorialDecisions, getYoutubePlaylistUrl, getPlaylistDNAByUrl } from '../utils/db';
 import { v4 as uuidv4 } from 'uuid';
 
 const MAX_VERSIONS = 5;
@@ -36,11 +36,18 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
   const originalAiOutput = useRef(null);
   const regenerationCount = useRef(0);
 
+  // Creative direction & must-include controls
+  const [creativeDirection, setCreativeDirection] = useState('');
+  const [mustIncludeDataPoints, setMustIncludeDataPoints] = useState([]);
+  const [customDataPoints, setCustomDataPoints] = useState([]);
+  const [customDpInput, setCustomDpInput] = useState('');
+
   // Locks
   const [lockedElements, setLockedElements] = useState({
     title: false,
     thumbnail: false,
     synopsis: false,
+    evidence: false,
   });
 
   // Versions
@@ -128,11 +135,28 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
           getAllEditorialDecisions(),
         ]);
         learningContext = buildLearningContext(outcomes, decisions);
-        setLastLearningContext(learningContext);
       } catch (e) {
         // Learning context is optional - don't block generation
         console.warn('Failed to build learning context:', e);
       }
+
+      // Append Show DNA context if available (replaces basic playlist context)
+      try {
+        const dnaPlaylistUrl = await getYoutubePlaylistUrl();
+        if (dnaPlaylistUrl) {
+          const dnaRecord = await getPlaylistDNAByUrl(dnaPlaylistUrl);
+          const dnaContext = buildDNAContext(dnaRecord);
+          if (dnaContext) {
+            learningContext = learningContext
+              ? `${learningContext}\n\n${dnaContext}`
+              : dnaContext;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to build DNA context:', e);
+      }
+
+      setLastLearningContext(learningContext);
 
       const res = await apiFetch('/api/generate-show', {
         method: 'POST',
@@ -145,8 +169,11 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
           lockedElements: regenerateOnly ? lockedElements : {},
           checkedDataPoints: regenerateOnly ? checkedDataPoints : allDataPoints.map((dp) => dp.id),
           currentContent: regenerateOnly
-            ? { title, thumbnailDescription, synopsis }
+            ? { title, thumbnailDescription, synopsis, suggestedDataPoints }
             : {},
+          creativeDirection: creativeDirection.trim() || null,
+          mustIncludeDataPoints,
+          customDataPoints,
           stylePrompt,
           libraryContext,
           learningContext,
@@ -172,7 +199,9 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
         ...sdp,
         id: sdp.dataPointId || `sdp-${i}`,
       }));
-      setSuggestedDataPoints(newSuggested);
+      if (!regenerateOnly || !lockedElements.evidence) {
+        setSuggestedDataPoints(newSuggested);
+      }
 
       if (!regenerateOnly) {
         setCheckedDataPoints(newSuggested.map((sdp) => sdp.id));
@@ -212,7 +241,7 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
     } finally {
       setLoading(false);
     }
-  }, [selectedVideos, lockedElements, checkedDataPoints, title, thumbnailDescription, synopsis, allDataPoints, generated, saveCurrentVersion, allLibraryVideos]);
+  }, [selectedVideos, lockedElements, checkedDataPoints, title, thumbnailDescription, synopsis, suggestedDataPoints, allDataPoints, generated, saveCurrentVersion, allLibraryVideos, creativeDirection, mustIncludeDataPoints, customDataPoints]);
 
   const handleSaveConcept = useCallback(async () => {
     if (!generated || !originalAiOutput.current) return;
@@ -289,6 +318,26 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
     );
   };
 
+  const toggleMustInclude = (id) => {
+    setMustIncludeDataPoints((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const addCustomDataPoint = () => {
+    const text = customDpInput.trim();
+    if (!text) return;
+    const id = `custom-${Date.now()}`;
+    setCustomDataPoints((prev) => [...prev, { id, claim: text }]);
+    setMustIncludeDataPoints((prev) => [...prev, id]);
+    setCustomDpInput('');
+  };
+
+  const removeCustomDataPoint = (id) => {
+    setCustomDataPoints((prev) => prev.filter((dp) => dp.id !== id));
+    setMustIncludeDataPoints((prev) => prev.filter((x) => x !== id));
+  };
+
   // Generate on first load if videos are selected
   useEffect(() => {
     if (selectedVideos.length > 0 && !generated && !loading) {
@@ -337,6 +386,81 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
       </div>
 
       <StyleConfig isOpen={styleConfigOpen} onClose={() => setStyleConfigOpen(false)} />
+
+      {/* Creative Direction */}
+      <div className="show-section" style={{ marginBottom: 24 }}>
+        <span className="show-section-label">Creative Direction (Optional)</span>
+        <textarea
+          className="input"
+          value={creativeDirection}
+          onChange={(e) => setCreativeDirection(e.target.value)}
+          placeholder='e.g. "Focus on liquidity divergence between US and China. Lean into the DXY breakdown and what it means for BTC dominance."'
+          rows={3}
+          style={{ marginTop: 8, resize: 'vertical' }}
+        />
+      </div>
+
+      {/* Available Evidence */}
+      {allDataPoints.length > 0 && (
+        <ExpandableSection
+          title="Available Evidence"
+          defaultOpen={false}
+          count={`${mustIncludeDataPoints.length} starred`}
+        >
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 12 }}>
+            Star data points the AI must include. Unstarred points are optional.
+          </p>
+          {allDataPoints.map((dp) => {
+            const starred = mustIncludeDataPoints.includes(dp.id);
+            return (
+              <div key={dp.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border, #333)' }}>
+                <button
+                  onClick={() => toggleMustInclude(dp.id)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '2px 4px', flexShrink: 0 }}
+                  title={starred ? 'Remove from must-include' : 'Mark as must-include'}
+                >
+                  {starred ? '\u2605' : '\u2606'}
+                </button>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: starred ? 600 : 400, fontSize: '0.9rem' }}>{dp.claim}</span>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginLeft: 8 }}>({dp.videoTitle})</span>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Custom data points */}
+          <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border, #333)' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Add Your Own</span>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <input
+                className="input"
+                value={customDpInput}
+                onChange={(e) => setCustomDpInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addCustomDataPoint()}
+                placeholder="Type a claim or data point..."
+                style={{ flex: 1 }}
+              />
+              <button className="btn btn-sm btn-primary" onClick={addCustomDataPoint} disabled={!customDpInput.trim()}>
+                Add
+              </button>
+            </div>
+            {customDataPoints.map((dp) => (
+              <div key={dp.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border, #333)' }}>
+                <span style={{ fontSize: '1.1rem', padding: '2px 4px', flexShrink: 0 }}>{'\u2605'}</span>
+                <span style={{ flex: 1, fontWeight: 600, fontSize: '0.9rem' }}>{dp.claim}</span>
+                <button
+                  onClick={() => removeCustomDataPoint(dp.id)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--text-secondary)', padding: '2px 6px' }}
+                  title="Remove"
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+          </div>
+        </ExpandableSection>
+      )}
 
       {/* Error */}
       {error && (
@@ -495,8 +619,13 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
           </LockableElement>
 
           {/* Data Points */}
-          <div className="show-section">
-            <span className="show-section-label">Evidence / Data Points for the Show</span>
+          <LockableElement
+            label="Evidence / Data Points for the Show"
+            locked={lockedElements.evidence}
+            onToggleLock={() => toggleLock('evidence')}
+            onRegenerate={() => handleGenerate(true)}
+            regenerating={loading}
+          >
             <div style={{ marginTop: 8 }}>
               {suggestedDataPoints.length === 0 ? (
                 <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>
@@ -542,7 +671,7 @@ export default function ShowGenerator({ videos, allLibraryVideos, selectedVideoI
                 })
               )}
             </div>
-          </div>
+          </LockableElement>
 
           {/* Action buttons */}
           <div style={{ textAlign: 'center', padding: '24px 0', display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>

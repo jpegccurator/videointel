@@ -6,6 +6,7 @@ const analyzeRoutes = require('./routes/analyze');
 const generateRoutes = require('./routes/generate');
 const settingsRoutes = require('./routes/settings');
 const styleRoutes = require('./routes/style');
+const dnaRoutes = require('./routes/dna');
 
 const app = express();
 const PORT = process.env.PORT || 4001;
@@ -53,6 +54,7 @@ app.use('/api', analyzeRoutes);
 app.use('/api', generateRoutes);
 app.use('/api', settingsRoutes);
 app.use('/api', styleRoutes);
+app.use('/api', dnaRoutes);
 
 // Production: serve built client
 const clientDist = path.join(__dirname, '..', 'client', 'dist');

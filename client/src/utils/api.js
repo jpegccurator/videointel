@@ -112,3 +112,59 @@ export function buildLearningContext(outcomes, decisions) {
 
   return sections.join('\n\n');
 }
+
+/**
+ * Builds a DNA-enriched context string from a playlistDNA record's insights.
+ * Used by the Show Generator when DNA data exists (replaces basic playlist context).
+ */
+export function buildDNAContext(dnaRecord) {
+  if (!dnaRecord?.insights) return null;
+
+  const { insights } = dnaRecord;
+  const lines = [];
+
+  lines.push(`=== SHOW DNA: Deep Channel Intelligence (${insights.overallStats?.totalVideos || 0} videos analyzed) ===`);
+  lines.push(`Avg views: ${(insights.overallStats?.avgViews || 0).toLocaleString()} | Median: ${(insights.overallStats?.medianViews || 0).toLocaleString()}`);
+  lines.push('');
+
+  if (insights.topTopics?.length > 0) {
+    lines.push('WINNING TOPICS (lean into these):');
+    insights.topTopics.slice(0, 7).forEach((t, i) => {
+      lines.push(`${i + 1}. "${t.topic}" — ${(t.avgViews || 0).toLocaleString()} avg views (${t.count} videos, ${t.trend || 'stable'})`);
+    });
+    lines.push('');
+  }
+
+  if (insights.worstTopics?.length > 0) {
+    lines.push('TOPICS TO AVOID:');
+    insights.worstTopics.forEach((t) => {
+      lines.push(`- "${t.topic}" — ${(t.avgViews || 0).toLocaleString()} avg views (${t.count} videos)`);
+    });
+    lines.push('');
+  }
+
+  if (insights.titlePatterns?.length > 0) {
+    lines.push('TITLE PATTERNS THAT WORK:');
+    insights.titlePatterns.forEach((p) => {
+      const examples = (p.examples || []).slice(0, 2).map((e) => `"${e}"`).join(', ');
+      lines.push(`- ${p.pattern}: ${(p.avgViews || 0).toLocaleString()} avg views${examples ? ` (e.g., ${examples})` : ''}`);
+    });
+    lines.push('');
+  }
+
+  if (insights.optimalDuration?.maxSeconds > 0) {
+    const min = Math.round(insights.optimalDuration.minSeconds / 60);
+    const max = Math.round(insights.optimalDuration.maxSeconds / 60);
+    lines.push(`OPTIMAL DURATION: ${min}-${max} minutes (${(insights.optimalDuration.avgViewsInRange || 0).toLocaleString()} avg views in range)`);
+    lines.push('');
+  }
+
+  if (insights.actionableInsights?.length > 0) {
+    lines.push('KEY INSIGHTS:');
+    insights.actionableInsights.slice(0, 5).forEach((insight, i) => {
+      lines.push(`${i + 1}. ${insight}`);
+    });
+  }
+
+  return lines.join('\n');
+}
